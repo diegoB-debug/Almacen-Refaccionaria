@@ -1,9 +1,9 @@
-def RegistrarRefaccion(ConexionDB,CodigoBarras,Nombre,NumParte,Modelo,Yr,Desc,LinkImg):
+def RegistrarRefaccion(ConexionDB,CodigoBarras,Articulo,NumParte,Marca,Categoria,Precio,Minimo,Ubicacion):
     with ConexionDB.cursor() as Cursor:
         Cursor.execute('''
-        INSERT INTO refaccion (codigobarras,nombre,num_parte,modelo,yr,descr,url_imagen)
-        VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING sku;
-        ''',(CodigoBarras,Nombre,NumParte,Modelo,Yr,Desc,LinkImg))
+        INSERT INTO refaccion (codigobarras,articulo,num_parte,marca,categoria,precio,minimo,ubicacion)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING codigo;
+        ''',(CodigoBarras,Articulo,NumParte,Marca,Categoria,Precio,Minimo,Ubicacion))
 
         SkuRefaccion = Cursor.fetchone()[0]
 
@@ -12,8 +12,8 @@ def RegistrarRefaccion(ConexionDB,CodigoBarras,Nombre,NumParte,Modelo,Yr,Desc,Li
 def BuscarRefaccion(ConexionDB,Buscador):
     with ConexionDB.cursor() as Cursor:
         Cursor.execute('''
-        SELECT * FROM refaccion WHERE sku = %s
-        ''',(Buscador,))
+        SELECT * FROM refaccion WHERE (codigo = %s) OR (codigobarras = %s)
+        ''',(Buscador,Buscador))
 
         Refaccion = Cursor.fetchone()
 

@@ -1,10 +1,14 @@
 CREATE TABLE IF NOT EXISTS Refaccion(
-    sku SERIAL PRIMARY KEY,
+    codigo SERIAL PRIMARY KEY,
     codigobarras TEXT,
-    nombre VARCHAR(50),
+    articulo VARCHAR(50),
     num_parte VARCHAR(15),
-    modelo VARCHAR(15),
-    yr SMALLINT,
-    descr TEXT,
-    url_imagen TEXT
+    marca VARCHAR(15),
+    categoria VARCHAR(20),
+    precio FLOAT4,
+    existencia INT DEFAULT 0,
+    apartado INT DEFAULT 0,
+    minimo INT,
+    ubicacion VARCHAR(15),
+    Estado VARCHAR(10) DEFAULT 'Agotado'
 );
