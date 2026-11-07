@@ -12,7 +12,9 @@ while True:
     print("""
     ========= SISTEMA DE ALMACÉN =========
     1. Registrar refacción (REG)
-    2. Buscar Refacción (SEARCH)
+    2. Buscar refacción (SEARCH)
+    3. Alta de refacción (ALTA)
+    4. Baja de refacción (BAJA)
     0. Salir (EXIT)
     ======================================
     """)
@@ -50,25 +52,62 @@ while True:
         case "2" | "SEARCH":
             Buscador = input("* Ingrese el código de barras o SKU de la refacción a buscar: ")
 
-            try:
-                with basedatos.ObtenerConexion() as Conexion:
-                    Refaccion = FuncionesRefacciones.BuscarRefaccion(Conexion,Buscador)
+            with basedatos.ObtenerConexion() as Conexion:
+                Refaccion = FuncionesRefacciones.BuscarRefaccion(Conexion,Buscador)
 
-                    if Refaccion is None:
-                        print("* No se encontró la parte.")
-                    else:
-                        print(f'''
-                        ========= {Refaccion[2]} =========
-                        Código: {Refaccion[0]}
-                        Código de barras: {Refaccion[1]}
-                        Precio: ${Refaccion[6]}
-                        Número de parte: {Refaccion[3]}
-                        Marca: {Refaccion[4]}
-                        Categoria: {Refaccion[5]}
-                        {Refaccion[7]} en existencia, estado: {Refaccion[11]}
-                        ''')
-            except Exception as Error:
-                print("* No se encontró la pieza.")
+                if Refaccion is None:
+                     print("* No se encontró la parte.")
+                else:
+                    print(f'''
+                    ========= {Refaccion[2]} =========
+                    Código: {Refaccion[0]}
+                    Código de barras: {Refaccion[1]}
+                    Precio: ${Refaccion[6]}
+                    Número de parte: {Refaccion[3]}
+                    Marca: {Refaccion[4]}
+                    Categoria: {Refaccion[5]}
+                    {Refaccion[7]} en existencia, estado: {Refaccion[11]}
+                    ''')
+
+
+        case "3" | "ALTA":
+            Cantidad = int(input("* Ingrese la cantidad de productos: "))
+            CodigoBarras = input("* Ingrese el código de barras del producto: ")
+
+            with basedatos.ObtenerConexion() as Conexion:
+                CodigoRefaccion,CantidadActual = FuncionesRefacciones.AltaRefacción(Conexion,CodigoBarras,Cantidad)
+
+                if CodigoRefaccion is None:
+                    print("* No se encontró la refacción.")
+                else:
+                    print(f"* Se añadieron {Cantidad} productos al producto con el código {CodigoRefaccion}")
+
+                    Minimo = FuncionesRefacciones.GetMinimo(Conexion,CodigoRefaccion)
+                    if CantidadActual <= Minimo:
+                        RefaccionActualizada = FuncionesRefacciones.ActualizarEstado(Conexion,CodigoRefaccion,'Bajo')
+                    elif CantidadActual > Minimo:
+                        RefaccionActualizada = FuncionesRefacciones.ActualizarEstado(Conexion,CodigoRefaccion,'En Stock')
+
+
+        case "4" | "BAJA":
+            Cantidad = int(input("* Ingrese la cantidad de productos: "))
+            CodigoBarras = input("* Ingrese el código de barras del producto: ")
+
+            with basedatos.ObtenerConexion() as Conexion:
+                CantidadActual = FuncionesRefacciones.GetCantidad(Conexion,CodigoBarras)
+
+                if CantidadActual[0] == '0' or CantidadActual[0]-Cantidad < 0:
+                    print("* La refacción no está en existencia o no hay suficientes disponibles.")
+                else:
+                    CodigoRefaccion,CantidadActual = FuncionesRefacciones.BajaRefacción(Conexion,CodigoBarras,Cantidad)
+                    print(f"* Se vendieron {Cantidad} productos con el código {CodigoRefaccion}")
+
+                    Minimo = FuncionesRefacciones.GetMinimo(Conexion,CodigoRefaccion)
+                    if CantidadActual <= Minimo:
+                        RefaccionActualizada = FuncionesRefacciones.ActualizarEstado(Conexion,CodigoRefaccion,'Bajo')
+                    elif CantidadActual > Minimo:
+                        RefaccionActualizada = FuncionesRefacciones.ActualizarEstado(Conexion,CodigoRefaccion,'En Stock')
+                    
 
         case "0" | "EXIT":
             print("Saliendo del programa.")
