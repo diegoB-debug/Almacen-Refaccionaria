@@ -15,6 +15,7 @@ while True:
     2. Buscar refacción (SEARCH)
     3. Alta de refacción (ALTA)
     4. Baja de refacción (BAJA)
+    5. Actualizar refacción (UPD)
     0. Salir (EXIT)
     ======================================
     """)
@@ -108,6 +109,43 @@ while True:
                     elif CantidadActual > Minimo:
                         RefaccionActualizada = FuncionesRefacciones.ActualizarEstado(Conexion,CodigoRefaccion,'En Stock')
                     
+
+        case "5" | "UPD":
+            CodigoRefaccion = input("* Ingrese el código de la refacción que se va a modificar: ")
+            with basedatos.ObtenerConexion() as Conexion:
+                if FuncionesRefacciones.BuscarRefaccion(Conexion,CodigoRefaccion) is None:
+                    print("* No se encontró esa refacción")
+                else:
+                    os.system('cls')
+                    DatosAActualizar = {}
+                    print('''
+                    ¿Qué datos se van a modificar? (Ej: precio,existencia,marca)
+                    * codigobarras
+                    * articulo
+                    * num_parte
+                    * marca
+                    * categoria
+                    * precio
+                    * ubicacion
+                    ''')
+
+                    Columnas = input("Selección: ")
+                    Columnas = [Columna.strip().lower() for Columna in Columnas.split(',')]
+
+                    for Columna in Columnas:
+                        if Columna in ['codigobarras','articulo','num_parte','marca','categoria','precio','ubicacion']:
+                            ValorNuevo = input(f"* Ingrese el valor nuevo para {Columna}: ")
+                            DatosAActualizar[Columna] = ValorNuevo
+                        else:
+                            print("* No existe esa columna")
+
+                    try:
+                        CodigoRefaccionAct = FuncionesRefacciones.ActualizarInfo(Conexion,CodigoRefaccion,DatosAActualizar)
+                        print(f"* Se cambiaron los datos de la refacción {CodigoRefaccionAct}")
+                    except Exception as Error:
+                        print(f"* No se pudo actualizar la refacción. Error: {Error}")
+
+
 
         case "0" | "EXIT":
             print("Saliendo del programa.")

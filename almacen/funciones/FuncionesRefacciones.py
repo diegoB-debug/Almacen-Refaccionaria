@@ -72,3 +72,17 @@ def ActualizarEstado(ConexionDB,Codigo,EstadoNuevo):
         CodigoRefaccion = Cursor.fetchone()[0]
 
     return CodigoRefaccion
+
+def ActualizarInfo(ConexionDB,Codigo,DatosACambiar):
+    with ConexionDB.cursor() as Cursor:
+        Columnas= ', '.join(f"{Columna} = %s" for Columna in DatosACambiar)
+        Valores = tuple(DatosACambiar.values())
+
+        Cambio = f'''
+        UPDATE refaccion SET {Columnas} WHERE codigo = %s RETURNING codigo;
+        '''
+
+        Cursor.execute(Cambio,Valores+(Codigo,))
+        CodigoRefaccion = Cursor.fetchone()[0]
+
+    return CodigoRefaccion
