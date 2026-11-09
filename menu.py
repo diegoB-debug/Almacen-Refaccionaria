@@ -1,6 +1,7 @@
 import os
 from almacen.basedatos import basedatos
 from almacen.funciones import FuncionesRefacciones
+from almacen.funciones import Chatbot
 
 basedatos.InicializarBD()
 # basedatos.CargarDatosPrueba() # Comentar esta línea después de correr el programa para que no se dupliquen los datos de prueba
@@ -16,6 +17,7 @@ while True:
     3. Alta de refacción (ALTA)
     4. Baja de refacción (BAJA)
     5. Actualizar refacción (UPD)
+    6. Asistente de búsqueda (CHAT)
     0. Salir (EXIT)
     ======================================
     """)
@@ -145,6 +147,11 @@ while True:
                     except Exception as Error:
                         print(f"* No se pudo actualizar la refacción. Error: {Error}")
 
+
+
+        case "6" | "CHAT":
+            with basedatos.ObtenerConexion() as Conexion:
+                Chatbot.IniciarChat(Conexion)
 
 
         case "0" | "EXIT":
