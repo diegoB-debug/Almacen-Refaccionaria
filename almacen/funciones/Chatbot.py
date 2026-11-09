@@ -1,6 +1,7 @@
 import random
 from difflib import get_close_matches
 from almacen.funciones import FuncionesRefacciones
+from almacen.basedatos import basedatos
 
 # Palabras que no sirven para buscar
 PalabrasIgnoradas = ['quiero','busco','buscando','busca','buscar','necesito','ocupo','quisiera','estoy','ando',
@@ -55,11 +56,11 @@ def EsNumero(Palabra):
     except ValueError:
         return False
 
-def Bot(Texto):
-    print(f"\nBot: {Texto}")
+def Bot(Texto,Respuestas):
+    Respuestas.append(Texto)
 
-def MostrarAyuda():
-    print('''
+def MostrarAyuda(Respuestas):
+    Respuestas.append('''
     Cada mensaje es una búsqueda nueva. Si solo me das marca, precio o 'en existencia',
     afino la búsqueda anterior. Ejemplos:
       busco baterías con precio menos a 200
@@ -76,13 +77,14 @@ def MostrarAyuda():
       salir     -> regresar al menú
     ''')
 
-def MostrarFiltros(Filtros):
+def MostrarFiltros(Filtros,Respuestas):
     if not Filtros:
-        Bot("Todavía no hay filtros activos.")
+        Respuestas.append("No hay filtros de búsqueda activos.")
         return
-    Bot("Estoy buscando con estos filtros:")
+    
+    Respuestas.append("Estos son los filtros actuales:")
     for Nombre,Valor in Filtros.items():
-        print(f"     - {Nombre}: {Valor}")
+        Respuestas.append(f"- {Nombre}: {Valor}")
 
 def Describir(Filtros):
     # Convierte los filtros en una frase, ej: "baterías de la marca Bosch con precio menor a $3,000"
@@ -108,6 +110,18 @@ def Describir(Filtros):
         else:
             Frase += f", de mayor a menor {Campo}"
     return Frase
+
+def CrearEstadoChat():
+    with basedatos.ObtenerConexion() as Conexion:
+        Marcas = FuncionesRefacciones.ObtenerValores(Conexion,'marca')
+        Categorias = FuncionesRefacciones.ObtenerValores(Conexion,'categoria')
+
+    return{
+        'Marcas': Marcas,
+        'Categorias': Categorias,
+        'Filtros': {},
+        'EsperandoRespuesta': False
+    }
 
 def LeerMensaje(Mensaje,Filtros,Marcas,Categorias):
     # Revisa el mensaje y va guardando los filtros que encuentre en el diccionario Filtros
@@ -238,14 +252,18 @@ def OrdenarRefacciones(Refacciones,Filtros):
 
     return sorted(Refacciones,key=Clave,reverse=(Filtros.get('orden') == 'desc'))
 
-def MostrarLista(Refacciones):
-    print()
+def MostrarLista(Refacciones,Respuestas):
     for Refaccion in Refacciones[:15]:
-        print(f"  [{Refaccion[0]}] {Refaccion[1]} | Parte: {Refaccion[2]} | {Refaccion[3]} | ${Refaccion[5]:,.2f} | {Refaccion[6]} en existencia ({Refaccion[7]})")
+        Respuestas.append(
+            f"[{Refaccion[0]}]: {Refaccion[1]}"
+            f"\nParte: {Refaccion[2]} | {Refaccion[3]}"
+            f"\n${Refaccion[5]:,.2f}"
+            f"\n{Refaccion[6]} En existencia"
+        )
     if len(Refacciones) > 15:
-        print(f"  ... y {len(Refacciones)-15} más. Dime otra característica para acotar.")
+        Respuestas.append(f"... y {len(Refacciones)-15} más. Dime otra característica para acotar.")
 
-def Responder(Conexion,Filtros,Extremo):
+def Responder(Conexion,Filtros,Extremo,Respuestas):
     # Regresa True si se quedó esperando una confirmación del cliente
     Refacciones = ObtenerRefacciones(Conexion,Filtros)
     Descripcion = Describir(Filtros)
@@ -253,19 +271,20 @@ def Responder(Conexion,Filtros,Extremo):
     if len(Refacciones) > 0:
         DescripcionSinOrden = Describir({C: V for C,V in Filtros.items() if C not in ['orden','campo']})
         if Extremo == 'barata':
-            Bot(f"La opción más económica de {DescripcionSinOrden} es:")
+            Respuestas.append(f"La opción más económica de {DescripcionSinOrden} es:")
             Refacciones = [Refacciones[0]]
         elif Extremo == 'cara':
-            Bot(f"La opción más cara de {DescripcionSinOrden} es:")
+            Respuestas.append(f"La opción más cara de {DescripcionSinOrden} es:")
             Refacciones = [Refacciones[-1]]
         elif len(Refacciones) == 1:
-            Bot(f"Solo encontré una opción de {Descripcion}:")
+            Respuestas.append(f"Solo encontré una opción de {Descripcion}:")
         else:
             Refacciones = OrdenarRefacciones(Refacciones,Filtros)
             Inicio = random.choice(["Encontré","Tengo","Mira, hay"])
-            Bot(f"{Inicio} {len(Refacciones)} opciones de {Descripcion}:")
-        MostrarLista(Refacciones)
-        print("\n     ¿Quieres afinar más? Puedes decirme otra marca, un precio, etc.")
+            Respuestas.append(f"{Inicio} {len(Refacciones)} opciones de {Descripcion}:")
+
+        MostrarLista(Refacciones,Respuestas)
+        Respuestas.append("¿Quieres afinar más? Puedes decirme otra marca, un precio, etc.")
         return False
 
     # No hubo resultados: se intenta explicar por qué
@@ -279,115 +298,147 @@ def Responder(Conexion,Filtros,Extremo):
                 Rango = f"cuesta ${Barato:,.0f}"
             else:
                 Rango = f"cuesta entre ${Barato:,.0f} y ${Caro:,.0f}"
-            Bot(f"No tengo {Descripcion}. Lo que sí tengo de {Describir(Sin)} {Rango}.")
-            print("     ¿Quieres que quite el filtro de precio y te las muestre? (sí/no)")
+            Respuestas.append(f"No tengo {Descripcion}. Lo que sí tengo de {Describir(Sin)} {Rango}.")
+            Respuestas.append("¿Quieres que quite el filtro de precio y te las muestre? (sí/no)")
             return True
 
-    Bot(f"Por ahora no tengo {Descripcion}.")
+    Respuestas.append(f"Por ahora no tengo {Descripcion}.")
     Sugerencia = "'quitar marca', 'quitar precio' o 'reiniciar'"
     if 'texto' in Filtros:
         Sugerencia = "'quitar texto' (por si escribiste mal una palabra), " + Sugerencia
-    print(f"     Puedes probar con {Sugerencia}.")
+    Respuestas.append(f"Puedes probar con {Sugerencia}.")
     return False
 
-def IniciarChat(Conexion):
-    Marcas = FuncionesRefacciones.ObtenerValores(Conexion,'marca')
-    Categorias = FuncionesRefacciones.ObtenerValores(Conexion,'categoria')
-    Filtros = {}
-    EsperandoRespuesta = False
 
-    Bot("¡Hola! Soy el asistente del almacén. Cuéntame qué pieza buscas. (Escribe 'ayuda' si quieres ver ejemplos)")
+def ProcesarMensaje(Mensaje, Conexion, EstadoChat):
+    Respuestas = []
 
-    while True:
-        Mensaje = input("\nTú: ").strip()
-        Texto = QuitarAcentos(Mensaje).strip('.,;:?!¿¡ ')
-        Palabras = Texto.split()
+    Marcas = EstadoChat['Marcas']
+    Categorias = EstadoChat['Categorias']
+    Filtros = EstadoChat['Filtros']
+    EsperandoRespuesta = EstadoChat['EsperandoRespuesta']
 
-        if Texto == '':
-            continue
+    Texto = QuitarAcentos(Mensaje).strip('.,;:?!¿¡ ')
+    Palabras = Texto.split()
 
-        if Texto in Despedidas:
-            Bot("¡Hasta luego, que tengas buen día!")
-            break
+    # Guarda los cambios antes de devolver las respuestas
+    def Finalizar():
+        EstadoChat['Filtros'] = Filtros
+        EstadoChat['EsperandoRespuesta'] = EsperandoRespuesta
+        return Respuestas
 
-        if Texto == 'ayuda':
-            MostrarAyuda()
-            continue
+    if Texto == '':
+        return Finalizar()
 
-        if Texto in ['reiniciar','nuevo','empezar de nuevo']:
-            Filtros = {}
-            EsperandoRespuesta = False
-            Bot("Listo, empezamos de nuevo. ¿Qué pieza buscas?")
-            continue
+    if Texto in Despedidas:
+        Bot("¡Hasta luego, que tengas buen día!", Respuestas)
+        return Finalizar()
 
-        if Texto == 'filtros':
-            MostrarFiltros(Filtros)
-            continue
+    if Texto == 'ayuda':
+        MostrarAyuda(Respuestas)
+        return Finalizar()
 
-        # Respuesta a la pregunta de "¿quito el filtro de precio?"
-        if EsperandoRespuesta:
-            EsperandoRespuesta = False
-            if Texto in Afirmaciones:
-                Filtros.pop('precio_min',None)
-                Filtros.pop('precio_max',None)
-                EsperandoRespuesta = Responder(Conexion,Filtros,None)
-                continue
-            if Texto == 'no':
-                Bot("Está bien. ¿Quieres cambiar el precio o buscar otra cosa?")
-                continue
+    if Texto in ['reiniciar', 'nuevo', 'empezar de nuevo']:
+        Filtros = {}
+        EsperandoRespuesta = False
+        Bot("Listo, empezamos de nuevo. ¿Qué pieza buscas?", Respuestas)
+        return Finalizar()
 
-        # Conversación básica
-        if 'gracias' in Palabras:
-            Bot("¡De nada! ¿Te ayudo con algo más?")
-            continue
-        if Palabras and Palabras[0] in Saludos and len(Palabras) <= 3:
-            Bot("¡Hola! ¿Qué refacción andas buscando?")
-            continue
-        if 'como estas' in Texto or 'que tal' in Texto:
-            Bot("¡Muy bien, listo para ayudarte a buscar piezas! ¿Qué necesitas?")
-            continue
+    if Texto == 'filtros':
+        MostrarFiltros(Filtros, Respuestas)
+        return Finalizar()
 
-        if Texto.startswith('quitar'):
-            QuitarFiltro(Texto,Filtros)
-            Bot("Listo, quité ese filtro.")
-            if not Filtros:
-                continue
-            EsperandoRespuesta = Responder(Conexion,Filtros,None)
-            continue
+    # Respuesta a la pregunta de "¿quito el filtro de precio?"
+    if EsperandoRespuesta:
+        EsperandoRespuesta = False
 
-        # ¿pide la más barata o la más cara?
-        Extremo = None
-        for i,Palabra in enumerate(Palabras[:-1]):
-            if Palabra == 'mas' and Palabras[i+1] in ['barata','barato','economica','economico']:
-                Extremo = 'barata'
-            elif Palabra == 'mas' and Palabras[i+1] in ['cara','caro']:
-                Extremo = 'cara'
+        if Texto in Afirmaciones:
+            Filtros.pop('precio_min', None)
+            Filtros.pop('precio_max', None)
+            EsperandoRespuesta = Responder(
+                Conexion, Filtros, None, Respuestas
+            )
+            return Finalizar()
 
-        # Cada mensaje se lee por separado
-        Nuevos = {}
-        LeerMensaje(Mensaje,Nuevos,Marcas,Categorias)
+        if Texto == 'no':
+            Bot("Está bien. ¿Quieres cambiar el precio o buscar otra cosa?", Respuestas)
+            return Finalizar()
 
-        if not Nuevos:
-            if Extremo is not None and Filtros:
-                EsperandoRespuesta = Responder(Conexion,Filtros,Extremo)   # "¿cuál es la más barata?"
-            else:
-                Bot("Mmm, no te entendí bien. Dime qué pieza buscas, por ejemplo: 'baterías Bosch' o 'bujías menos de 200'.")
-            continue
+    # Conversación básica
+    if 'gracias' in Palabras:
+        Bot("¡De nada! ¿Te ayudo con algo más?", Respuestas)
+        return Finalizar()
 
-        # ¿Es un seguimiento de la búsqueda anterior o una búsqueda nueva?
-        # Seguimiento: empieza con "y", "pero", "ahora"... o solo trae marca/precio/existencia (sin tipo de pieza)
-        EsSeguimiento = bool(Filtros) and (Palabras[0] in PalabrasSeguimiento or ('categoria' not in Nuevos and 'texto' not in Nuevos))
+    if Palabras and Palabras[0] in Saludos and len(Palabras) <= 3:
+        Bot("¡Hola! ¿Qué refacción andas buscando?", Respuestas)
+        return Finalizar()
 
-        if EsSeguimiento:
-            if 'categoria' in Nuevos and Filtros.get('categoria') != Nuevos['categoria']:
-                Filtros.pop('texto',None)   # cambió de tipo de pieza, se olvida el texto anterior
-            for Clave,Valor in Nuevos.items():
-                if Clave == 'texto':
-                    Previo = Filtros.setdefault('texto',[])
-                    Previo += [P for P in Valor if P not in Previo]
-                else:
-                    Filtros[Clave] = Valor
+    if 'como estas' in Texto or 'que tal' in Texto:
+        Bot("¡Muy bien, listo para ayudarte a buscar piezas! ¿Qué necesitas?", Respuestas)
+        return Finalizar()
+
+    if Texto.startswith('quitar'):
+        QuitarFiltro(Texto, Filtros)
+        Bot("Listo, quité ese filtro.", Respuestas)
+
+        if not Filtros:
+            return Finalizar()
+
+        EsperandoRespuesta = Responder(
+            Conexion, Filtros, None, Respuestas
+        )
+        return Finalizar()
+
+    # ¿Pide la más barata o la más cara?
+    Extremo = None
+
+    for i, Palabra in enumerate(Palabras[:-1]):
+        if Palabra == 'mas' and Palabras[i+1] in ['barata', 'barato', 'economica', 'economico']:
+            Extremo = 'barata'
+
+        elif Palabra == 'mas' and Palabras[i+1] in ['cara', 'caro']:
+            Extremo = 'cara'
+
+    # Cada mensaje se lee por separado
+    Nuevos = {}
+    LeerMensaje(Mensaje, Nuevos, Marcas, Categorias)
+
+    if not Nuevos:
+        if Extremo is not None and Filtros:
+            EsperandoRespuesta = Responder(
+                Conexion, Filtros, Extremo, Respuestas
+            )
         else:
-            Filtros = Nuevos   # búsqueda nueva: se olvida lo anterior
+            Bot(
+                "Mmm, no te entendí bien. Dime qué pieza buscas, "
+                "por ejemplo: 'baterías Bosch' o 'bujías menos de 200'.",
+                Respuestas
+            )
 
-        EsperandoRespuesta = Responder(Conexion,Filtros,Extremo)
+        return Finalizar()
+
+    # ¿Es un seguimiento de la búsqueda anterior o una búsqueda nueva?
+    EsSeguimiento = bool(Filtros) and (
+        Palabras[0] in PalabrasSeguimiento or
+        ('categoria' not in Nuevos and 'texto' not in Nuevos)
+    )
+
+    if EsSeguimiento:
+        if 'categoria' in Nuevos and Filtros.get('categoria') != Nuevos['categoria']:
+            Filtros.pop('texto', None)
+
+        for Clave, Valor in Nuevos.items():
+            if Clave == 'texto':
+                Previo = Filtros.setdefault('texto', [])
+                Previo += [P for P in Valor if P not in Previo]
+            else:
+                Filtros[Clave] = Valor
+
+    else:
+        Filtros = Nuevos
+
+    EsperandoRespuesta = Responder(
+        Conexion, Filtros, Extremo, Respuestas
+    )
+
+    return Finalizar()

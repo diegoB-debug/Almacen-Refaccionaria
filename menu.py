@@ -2,6 +2,7 @@ import os
 from almacen.basedatos import basedatos
 from almacen.funciones import FuncionesRefacciones
 from almacen.funciones import Chatbot
+import ChatbotUi
 
 basedatos.InicializarBD()
 # basedatos.CargarDatosPrueba() # Comentar esta línea después de correr el programa para que no se dupliquen los datos de prueba
@@ -150,8 +151,7 @@ while True:
 
 
         case "6" | "CHAT":
-            with basedatos.ObtenerConexion() as Conexion:
-                Chatbot.IniciarChat(Conexion)
+            ChatbotUi.AbrirVentanaChatbot()
 
 
         case "0" | "EXIT":
