@@ -86,3 +86,50 @@ def ActualizarInfo(ConexionDB,Codigo,DatosACambiar):
         CodigoRefaccion = Cursor.fetchone()[0]
 
     return CodigoRefaccion
+
+
+def ObtenerValores(ConexionDB,Columna):
+    # Regresa una lista con las marcas o categorías que existen en la tabla
+    if Columna not in ['marca','categoria']:
+        return []
+
+    with ConexionDB.cursor() as Cursor:
+        Cursor.execute(f"SELECT DISTINCT {Columna} FROM refaccion ORDER BY {Columna};")
+        Valores = [Fila[0] for Fila in Cursor.fetchall()]
+
+    return Valores
+
+def FiltrarRefacciones(ConexionDB,Filtros):
+    # Filtros es un diccionario, por ejemplo: {'marca': 'Bosch', 'precio_max': 500, 'disponibles': True}
+    Condiciones = []
+    Valores = []
+
+    if 'marca' in Filtros:
+        Condiciones.append("marca = %s")
+        Valores.append(Filtros['marca'])
+
+    if 'categoria' in Filtros:
+        Condiciones.append("categoria = %s")
+        Valores.append(Filtros['categoria'])
+
+    if 'precio_min' in Filtros:
+        Condiciones.append("precio >= %s")
+        Valores.append(Filtros['precio_min'])
+
+    if 'precio_max' in Filtros:
+        Condiciones.append("precio <= %s")
+        Valores.append(Filtros['precio_max'])
+
+    if Filtros.get('disponibles'):
+        Condiciones.append("existencia > 0")
+
+    Consulta = "SELECT codigo, articulo, num_parte, marca, categoria, precio, existencia, estado FROM refaccion"
+    if Condiciones:
+        Consulta += " WHERE " + " AND ".join(Condiciones)
+    Consulta += " ORDER BY precio;"
+
+    with ConexionDB.cursor() as Cursor:
+        Cursor.execute(Consulta,tuple(Valores))
+        Refacciones = Cursor.fetchall()
+
+    return Refacciones
